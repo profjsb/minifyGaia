@@ -41,16 +41,18 @@ import duckdb
 from config_astrom import *
 
 # always pull these columns
-columns_to_save = [("htm20", "UBIGINT NOT NULL", True), 
-                   ("x", "DOUBLE NOT NULL", False),
-                   ("y", "DOUBLE NOT NULL", False),
-                   ("z", "DOUBLE NOT NULL", False)] + columns_to_save
+columns_to_save = [
+    ("htm20", "UBIGINT NOT NULL", True),
+    ("x", "DOUBLE NOT NULL", False),
+    ("y", "DOUBLE NOT NULL", False),
+    ("z", "DOUBLE NOT NULL", False),
+] + columns_to_save
 
 columns_to_pull = list(set(columns_to_pull + ["ra", "dec"]))
 
-def make_db(table_name = default_table_name, 
-            filename=default_filename, clobber=False):
-    
+
+def make_db(table_name=default_table_name, filename=default_filename, clobber=False):
+
     if clobber and os.path.exists(filename):
         os.remove(filename)
         print(f"removed file {filename}")
@@ -76,18 +78,17 @@ def make_db(table_name = default_table_name,
     for column in columns_to_save:
         if column[2]:
             print(f"Creating index on {column[0]}")
-            sql_create_indices =  f"""
+            sql_create_indices = f"""
                 CREATE INDEX {column[0]}_index ON {table_name} ({column[0]});"""
             conn.execute(sql_create_indices)
 
     print(f"DB created in file {filename}")
 
 
-def add_file(fname, table_name = default_table_name, 
-            filename=default_filename):
+def add_file(fname, table_name=default_table_name, filename=default_filename):
 
     conn = duckdb.connect(filename)
-    
+
     rez = conn.execute(f"""SELECT * from meta where filename = '{fname}'""").fetchall()
     if len(rez) != 0:
         print(f"[{fname}] Already added on {rez[0][4]}. Skipping.")
@@ -101,15 +102,14 @@ def add_file(fname, table_name = default_table_name,
     small_indexed_fname = f"sin{unz_fname}"
 
     colnames = [x if isinstance(x, str) else x[0] for x in columns_to_pull]
-    df = pd.read_csv(f"{fname}", 
-                comment="#", usecols=colnames)
-    
+    df = pd.read_csv(f"{fname}", comment="#", usecols=colnames)
+
     if drop_missing_rows:
         df1 = df.dropna(axis=0, how="any")
     else:
         df1 = df.copy()
 
-    # use the bounds on what we ingest 
+    # use the bounds on what we ingest
     # to create a mask
     mask = np.ones((len(df1),), dtype=bool)
     for column in columns_to_pull:
@@ -122,21 +122,26 @@ def add_file(fname, table_name = default_table_name,
 
     if max_pm is not None:
         if "pmra" not in columns_to_pull or "pmdec" not in columns_to_pull:
-            raise KeyError("Missing required columns to limit proper motion") 
-        mask = mask & (df1.loc[:,"pmra"]**2 + df1.loc[:, "pmdec"]**2 < max_pm**2)
-    
+            raise KeyError("Missing required columns to limit proper motion")
+        mask = mask & (df1.loc[:, "pmra"] ** 2 + df1.loc[:, "pmdec"] ** 2 < max_pm**2)
+
     # apply the mask
     df1 = df1[mask]
-    print(f"[{fname}] With cuts, compressed to {100*len(df1)/len(df):4.2f}% of original # rows")
+    print(
+        f"[{fname}] With cuts, compressed to {100*len(df1)/len(df):4.2f}% of original # rows"
+    )
 
     df1.to_csv(small_fname, index=False)
     _ = call(f"SpatialIndex/bin/sptIndx 20 {small_fname} {indexed_fname}", shell=True)
 
     colnames = [x if isinstance(x, str) else x[0] for x in columns_to_save]
-    pd.read_csv(f"{indexed_fname}",usecols=colnames)[colnames] \
-                    .to_csv(small_indexed_fname, index=False)
-    
-    conn.execute(f"""COPY {table_name} FROM '{small_indexed_fname}' ( HEADER,  SAMPLE_SIZE 1, AUTO_DETECT FALSE );""")
+    pd.read_csv(f"{indexed_fname}", usecols=colnames)[colnames].to_csv(
+        small_indexed_fname, index=False
+    )
+
+    conn.execute(
+        f"""COPY {table_name} FROM '{small_indexed_fname}' ( HEADER,  SAMPLE_SIZE 1, AUTO_DETECT FALSE );"""
+    )
     total = time.time() - start
 
     # save some bookkeeping data
@@ -151,8 +156,12 @@ def add_file(fname, table_name = default_table_name,
     os.remove(indexed_fname)
     os.remove(small_indexed_fname)
 
-def ingest_all(source_list=default_source_list, download_if_missing=True,
-               loc="http://cdn.gea.esac.esa.int/Gaia/gdr3/gaia_source"):
+
+def ingest_all(
+    source_list=default_source_list,
+    download_if_missing=True,
+    loc="http://cdn.gea.esac.esa.int/Gaia/gdr3/gaia_source",
+):
 
     for line in open(source_list, "r").readlines():
         fname = line.split()[0]
@@ -163,9 +172,12 @@ def ingest_all(source_list=default_source_list, download_if_missing=True,
         if os.path.exists(fname):
             add_file(fname)
 
-if __name__ == '__main__':
-    fire.Fire({
-        'add_file': add_file,
-        'make_db': make_db,
-        'ingest_all': ingest_all,
-    })
+
+if __name__ == "__main__":
+    fire.Fire(
+        {
+            "add_file": add_file,
+            "make_db": make_db,
+            "ingest_all": ingest_all,
+        }
+    )

@@ -1,0 +1,8 @@
+pandas
+numpy
+fire
+duckdb
+cython
+healpy
+ADQL
+astropy
